@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+
+<suite name="All Integration tests" verbose="1" >
+    <test name="tests.HealthCheckTest">
+        <classes>
+            <class name="tests.HealthCheckTest" />
+        </classes>
+    </test>
+</suite>

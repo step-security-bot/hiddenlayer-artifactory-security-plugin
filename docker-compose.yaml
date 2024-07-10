@@ -18,6 +18,8 @@ services:
     image: ${DOCKER_REGISTRY}/jfrog/artifactory-pro:${ARTIFACTORY_VERSION}
     container_name: artifactory
     environment:
+      - HL_CLIENT_ID=${HL_CLIENT_ID}
+      - HL_CLIENT_SECRET=${HL_CLIENT_SECRET}
       - JF_ROUTER_ENTRYPOINTS_EXTERNALPORT=${JF_ROUTER_ENTRYPOINTS_EXTERNALPORT}
       - JAVA_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
     ports:

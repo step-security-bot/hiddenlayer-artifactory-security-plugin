@@ -1,0 +1,35 @@
+plugins {
+    id 'groovy'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.codehaus.groovy:groovy-all:3.0.9'
+    testImplementation 'commons-validator:commons-validator:1.7'
+    testImplementation 'io.rest-assured:rest-assured:4.4.0'
+    testImplementation 'org.testng:testng:7.9.0'
+    testImplementation 'org.yaml:snakeyaml:1.29'
+}
+
+test {
+    useTestNG(){
+        suites('src/test/groovy/testing.xml')
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+}
+
+task artifactory_common(type: Test) {
+    useTestNG(){
+        useDefaultListeners = true
+        suites('src/test/groovy/testing.xml')
+        includeGroups('common')
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+}

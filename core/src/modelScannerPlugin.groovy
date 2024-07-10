@@ -181,7 +181,10 @@ void loadConfig() {
     def api = config.get("api")
     def scan = config.get("scan")
 
-    def hlauth = Base64.getEncoder().encodeToString(((auth.get("client_id") as String) + ":" + (auth.get("client_secret") as String)).getBytes())
+    def client_id = System.getenv("HL_CLIENT_ID") != null ? System.getenv("HL_CLIENT_ID") : auth.get("client_id")
+    def client_secret = System.getenv("HL_CLIENT_SECRET") != null ? System.getenv("HL_CLIENT_SECRET") : auth.get("client_secret")
+
+    def hlauth = Base64.getEncoder().encodeToString(((client_id as String) + ":" + (client_secret as String)).getBytes())
     configCache.put('auth_key', hlauth)
     configCache.put('auth_url', auth.get("url") as String)
     configCache.put('api_url', api.get("url") as String)
