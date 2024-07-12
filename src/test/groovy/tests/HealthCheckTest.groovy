@@ -3,6 +3,7 @@ package tests
 import io.restassured.path.json.JsonPath
 import io.restassured.response.Response
 import org.hamcrest.Matchers
+import org.junit.Assert
 import org.testng.Reporter
 import org.testng.annotations.Ignore
 import org.testng.annotations.Test
@@ -39,21 +40,7 @@ class HealthCheckTest extends RepositorySteps {
         Reporter.log("- Ping test. Service is OK", true)
     }
 
-    @Test(priority=2, groups=["common"], testName = "Change default password")
-    void changeDefaultPassword() {
-        if (System.env.NEW_RT_PASSWORD != null) {
-            Response response = securitySteps.changePassword(artifactoryURL, username, default_password, password)
-            if(response.getStatusCode()==401 || response.getStatusCode()==400){
-                Reporter.log("- This Artifactory instance doesn't use default password for admin user", true)
-            } else if(response.getStatusCode()==200){
-                    Reporter.log("- Default password has been changed with NEW_RT_PASSWORD value", true)
-            }
-        } else { Reporter.log("- NEW_RT_PASSWORD env var was not set. " +
-                "Default password has not been changed! Please change it in the UI", true)
-        }
-    }
-
-    @Test(priority=3, groups=["common"], testName = "Set base URL")
+    @Test(priority=2, groups=["common"], testName = "Set base URL")
     void setBaseURLTest() {
         Response response = setBaseUrl(artifactoryURL, username, password, artifactoryBaseURL)
         response.then().assertThat().log().ifValidationFails().statusCode(200).
@@ -61,7 +48,24 @@ class HealthCheckTest extends RepositorySteps {
         Reporter.log("- Update Custom URL Base. Updated with ${artifactoryBaseURL}", true)
     }
 
-    @Test(priority=4, testName = "Check number of licenses/nodes")
+    @Test(priority=3, groups=["common"], testName = "Install license")
+    void installLicenseTest() throws AssertionError {
+        if (System.env.RT_LICENSE_KEY != null) {
+            Response response = securitySteps.installLicense(artifactoryURL, username, password, System.env.RT_LICENSE_KEY)
+            if(response.getStatusCode()==200){
+                Reporter.log("- License installed successfully", true)
+            } else if (response.getStatusCode() == 400 && response.body().asString().contains("License already exists.")) {
+                Reporter.log("- License has already been installed.", true)
+            } else {
+                Reporter.log("- License installation failed. Please check the license key", true)
+                Assert.fail("License installation failed. Please check the license key")
+            }
+        } else {
+            Reporter.log("- RT_LICENSE_KEY env var was not set. License has not been installed!", true)
+        }
+    }
+
+    @Test(priority=4, groups=["common"], testName = "Check number of licenses/nodes")
     void checkLicensesTest() throws AssertionError {
         Response licenses = securitySteps.getLicenseInformation(artifactoryURL, username, password)
         licenses.then().log().ifValidationFails().statusCode(200)

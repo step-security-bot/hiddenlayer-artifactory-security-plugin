@@ -34,4 +34,18 @@ class RepositorySteps extends TestSetup {
                 .then()
                 .extract().response()
     }
+
+    static def createRepository(artifactoryURL, username, password, repoKey, body) {
+        return given()
+                .auth()
+                .preemptive()
+                .basic(username, password)
+                .header("Cache-Control", "no-cache")
+                .header("content-Type", "application/json")
+                .body(body)
+                .when()
+                .put("${artifactoryURL}/api/repositories/${repoKey}")
+                .then()
+                .extract().response()
+    }
 }

@@ -33,3 +33,14 @@ task artifactory_common(type: Test) {
         showStandardStreams = true
     }
 }
+
+task modelscanner(type: Test) {
+    useTestNG(){
+        useDefaultListeners = true
+        suites('src/test/groovy/testing.xml')
+        includeGroups('model-scanner')
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+}

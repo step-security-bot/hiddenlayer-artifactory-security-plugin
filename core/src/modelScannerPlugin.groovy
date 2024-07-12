@@ -344,21 +344,22 @@ download {
         }
 
         def artifactStatus = repositories.getProperties(responseRepoPath).getFirst('hiddenlayer.status')
+        log.info "file: $responseRepoPath status: $artifactStatus"
         if (artifactStatus == 'UNSAFE') {
             status = 403
             message = "Artifact is unsafe"
-            return new Error("Artifact is unsafe")
         }
         if (artifactStatus == 'PENDING') {
             status = 403
             message = "Artifact is being scanned by hiddenlayer"
-            return new Error("Artifact is being scanned by hiddenlayer")
         }
 
         if (artifactStatus != 'SAFE') {
+            log.error("Artifact is not in an expected state: $artifactStatus")
             // we should not be here, but here we are!
             // this means the model was allowed to download without a decision from hiddenlayer,
             // so we will let the user decide what to do from here.
+
             if (configCache.scan_missing_retry == true) {
                 Thread.start {
                     def modelInfo = parseModelInfo(request, responseRepoPath)
@@ -386,20 +387,23 @@ download {
                     sensorCache.remove(modelInfo.url)
                 }
             }
-
             if (configCache.scan_decision_missing == 'deny') {
                 status = 403
                 message = "Artifact has not been scanned by hiddenlayer"
-                return new Error("Artifact has not been scanned by hiddenlayer")
             }
         }
     }
+
     beforeDownload { Request request, RepoPath responseRepoPath ->
         if (!shouldScanRepo(responseRepoPath.repoKey)) {
             return
         }
 
+        log.info "beforeDownload: $responseRepoPath"
+
         def modelInfo = parseModelInfo(request, responseRepoPath)
+        def properties = repositories.getProperties(responseRepoPath)
+        log.info "file: $responseRepoPath properties: $properties"
         def artifactStatus = repositories.getProperties(responseRepoPath).getFirst('hiddenlayer.status')
         def sensorId = sensorCache.get(modelInfo.url)
 
@@ -411,13 +415,13 @@ download {
             return new Error("Artifact is being scanned by hiddenlayer")
         }
         if (artifactStatus != 'SAFE' || (artifactStatus == 'PENDING' && !sensorId)) {
+            repositories.setProperty(responseRepoPath, 'hiddenlayer.status', 'PENDING')
             def token = authenticateWithHiddenLayer()
             if (!token) {
                 log.error "Failed to authenticate with hiddenlayer"
                 return new Error("Failed to authenticate with hiddenlayer")
             }
             submitHiddenLayerScan(modelInfo)
-            repositories.setProperty(responseRepoPath, 'hiddenlayer.status', 'PENDING')
             def modelStatus = getHiddenLayerStatus(modelInfo)
             if (!modelStatus) {
                 log.error "Failed to get model status for file $responseRepoPath"

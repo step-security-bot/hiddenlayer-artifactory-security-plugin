@@ -2,5 +2,6 @@ artifactory:
   protocol: http://
   url: localhost:8082
   external_ip: localhost:8082
+  artifact_url: localhost:8081
   rt_username: admin
   rt_password: password

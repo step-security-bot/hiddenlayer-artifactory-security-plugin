@@ -8,7 +8,8 @@
     "overrideCommand": false,
     "remoteEnv": {
         "HL_CLIENT_ID": "${localEnv:HL_CLIENT_ID}",
-        "HL_CLIENT_SECRET": "${localEnv:HL_CLIENT_SECRET}"
+        "HL_CLIENT_SECRET": "${localEnv:HL_CLIENT_SECRET}",
+        "RT_LICENSE_KEY": "${localEnv:RT_LICENSE_KEY}"
     },
     "remoteUser": "vscode",
     "features": {

@@ -6,4 +6,9 @@
             <class name="tests.HealthCheckTest" />
         </classes>
     </test>
+    <test name="tests.ModelScannerTest">
+        <classes>
+            <class name = "tests.ModelScannerTest" />
+        </classes>
+    </test>
 </suite>

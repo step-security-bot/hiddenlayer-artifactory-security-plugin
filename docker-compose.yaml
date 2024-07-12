@@ -30,6 +30,7 @@ services:
       - ./core/src:/opt/jfrog/artifactory/var/etc/artifactory/plugins
       - artifactory:/var/opt/jfrog/artifactory
       - ./config/artifactory.system.properties:/opt/jfrog/artifactory/var/etc/artifactory/artifactory.system.properties
+      - ./config/access.config.patch.yml:/opt/jfrog/artifactory/var/etc/access/access.config.patch.yml
       - ./config/logback.xml:/opt/jfrog/artifactory/var/etc/artifactory/logback.xml
       - /etc/localtime:/etc/localtime:ro
     ulimits:

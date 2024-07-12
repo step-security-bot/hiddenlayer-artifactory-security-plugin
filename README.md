@@ -61,8 +61,14 @@ docker compose up
 ```
 2. Run the tests
 ```bash
-gradle test
+gradle clean
+gradle artifactory_common
+gradle modelscanner
 ```
+
+The `artifactory_common` set of tests will check the health of JFrog artifactory and install the license set in the environment variable `HL_LICENSE_KEY`.
+The `modelscanner` set of tests will set up a remote huggingface repository and attempt to download a huggingface model from it.
+
 
 ## Resources
 
