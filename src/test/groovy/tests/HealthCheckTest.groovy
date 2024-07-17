@@ -1,5 +1,6 @@
 package tests
 
+import groovy.time.TimeCategory
 import io.restassured.path.json.JsonPath
 import io.restassured.response.Response
 import org.hamcrest.Matchers
@@ -16,9 +17,30 @@ class HealthCheckTest extends RepositorySteps {
 
     @Test(priority=0, groups="common", testName = "Health check for all 4 services")
     void healthCheckTest(){
-        Response response = getHealthCheckResponse(artifactoryBaseURL)
+        // Wait for artifactory to start
+        def start = new Date()
+        def timeLimit
+        use (TimeCategory) {
+            timeLimit = start + 3.minutes
+        }
+
+        Response response
+
+        while (new Date() < timeLimit){
+            try {
+                response = getHealthCheckResponse(artifactoryBaseURL)
+                if (response.getStatusCode() == 200) {
+                    break
+                }
+                Reporter.log("- Artifactory is not ready yet. Waiting for 10 seconds: ${response.getStatusCode()}", true)
+            } catch (Exception e) {
+                Reporter.log("- Artifactory is not ready yet. Waiting for 10 seconds: ${e}", true)
+            }
+            Thread.sleep(10000)
+       }
+
         response.then().assertThat().log().ifValidationFails().statusCode(200).
-                body("router.state", Matchers.equalTo("HEALTHY"))
+            body("router.state", Matchers.equalTo("HEALTHY"))
 
         int bodySize = response.body().jsonPath().getList("services").size()
         for (int i = 0; i < bodySize; i++) {
