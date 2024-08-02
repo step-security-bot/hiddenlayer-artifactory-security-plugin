@@ -179,6 +179,9 @@ class ModelScanner {
             log.debug "file: $responseRepoPath status: $modelStatus"
             repositories.setProperty(responseRepoPath, 'hiddenlayer.status', modelStatus)
             sensorCache.remove(modelInfo.repoPath)
+            if (config.deleteAfterScan) {
+                api.deleteModel(sensorId)
+            }
         }
     }
 

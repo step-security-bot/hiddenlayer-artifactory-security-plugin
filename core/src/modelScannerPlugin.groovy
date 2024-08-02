@@ -86,6 +86,10 @@ download {
                 }
                 log.debug "file: $responseRepoPath status: $modelStatus"
                 repositories.setProperty(responseRepoPath, 'hiddenlayer.status', modelStatus)
+                if (config.deleteAfterScan) {
+                    sensorId = modelScanner.getSensorIdForUrl(modelInfo.repoPath)
+                    api.deleteModel(sensorId)
+                }
                 if (modelStatus == ARTIFACT_STATUS_UNSAFE) {
                     log.warn "Attempted to download unsafe file $responseRepoPath"
                     return new Error('Artifact is unsafe')

@@ -140,6 +140,18 @@ class Api extends BaseClient {
         ]
     }
 
+    void deleteModel(String sensorId) {
+        String endpoint = '/sensors/' + sensorId
+        String token = auth.authenticateWithHiddenLayer()
+
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
+                .DELETE()
+                .build()
+
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_NO_CONTENT]
+        this.sendRequest(request, expectedStatusCodes)
+    }
+
     protected HttpResponse<String> sendRequest(HttpRequest request, Number[] expectedStatusCodes) {
         Number[] expectedStatusCodesWithAuthError = expectedStatusCodes + [HttpURLConnection.HTTP_UNAUTHORIZED]
 

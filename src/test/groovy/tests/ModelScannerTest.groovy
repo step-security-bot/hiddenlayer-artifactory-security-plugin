@@ -8,6 +8,8 @@ import org.testng.annotations.Test
 import steps.RepositorySteps
 import steps.SecuritySteps
 
+import static org.hamcrest.Matchers.equalTo
+
 import static io.restassured.RestAssured.given
 
 class ModelScannerTest extends RepositorySteps {
@@ -38,9 +40,23 @@ class ModelScannerTest extends RepositorySteps {
     void downloadModelFromRemoteHuggingFaceTest() {
         downloadModelTest("hf", "prajjwal1/bert-tiny", "resolve/4746226cbb28f1e1c99977204b3ac22ecfe3a072/pytorch_model.bin", true)
     }
+
     @Test(priority=2, groups="model-scanner", testName = "Download unsafe file is prevented from Remote HuggingFace Repo")
     void downloadUnsafeModelFromRemoteHuggingFaceTest() {
         downloadModelTest("hf", "matanby/unsafe-diffusion", "resolve/243eb928376792047369d2ef072d03528c611909/diffusion_pytorch_model.bin", false)
+    }
+
+    @Test(priority=3, groups="model-scanner", testName = "Scan results are saved as properties")
+    void scanResultsAreSavedAsPropertiesTest() {
+        def safePath = "hf-cache/models/prajjwal1/bert-tiny/main/2021-10-27T18:29:01.000Z/pytorch_model.bin"
+        Response response = getInfo(artifactoryURL, username, password, safePath)
+        response.then().assertThat().log().ifValidationFails().statusCode(200)
+                .body("properties['hiddenlayer.status'][0]", equalTo("SAFE"))
+        def unsafePath = "hf-cache/models/matanby/unsafe-diffusion/243eb928376792047369d2ef072d03528c611909/2024-03-19T19:05:00.000Z/diffusion_pytorch_model.bin"
+        response = getInfo(artifactoryURL, username, password, unsafePath)
+        response.then().assertThat().log().ifValidationFails().statusCode(200)
+                .body("properties['hiddenlayer.status'][0]", equalTo("UNSAFE"))
+
     }
 
     void downloadModelTest(repo, model, file, isFileSafe) {

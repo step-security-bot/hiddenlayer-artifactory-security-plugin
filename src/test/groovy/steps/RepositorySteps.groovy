@@ -48,4 +48,18 @@ class RepositorySteps extends TestSetup {
                 .then()
                 .extract().response()
     }
+
+    static def getInfo(artifactoryURL, username, password, path) {
+        return given()
+                .auth()
+                .preemptive()
+                .basic(username, password)
+                .header("Cache-Control", "no-cache")
+                .header("Content-Type", "application/json")
+                .when()
+                .get("${artifactoryURL}/api/storage/" + path + "?properties")
+                .then()
+                .extract().response()
+    }
+
 }

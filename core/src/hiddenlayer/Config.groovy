@@ -16,6 +16,7 @@ class Config {
     String[] scanRepos = []
     String scanDecisionMissing
     boolean scanMissingRetry
+    boolean deleteAfterScan
 
     Config(InternalArtifactoryContext ctx) {
         loadConfig(ctx)
@@ -46,6 +47,8 @@ class Config {
         scanDecisionMissing = scan.get('decision_missing') as String
         String retry = scan.get('missing_decision_retry') as String
         scanMissingRetry = retry != 'false'
+        String delete = scan.get('delete_after_scan') as String
+        deleteAfterScan = delete != 'false'
     }
 
 }
