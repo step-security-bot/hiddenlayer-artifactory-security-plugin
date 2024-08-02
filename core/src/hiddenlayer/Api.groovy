@@ -4,10 +4,12 @@ import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
 import groovy.transform.CompileDynamic
 
-import java.net.http.HttpClient
+import hiddenlayer.models.ModelInfo
+import hiddenlayer.models.ModelStatus
+import hiddenlayer.models.MultipartUploadResponse
+
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.time.Instant
 
 import org.slf4j.Logger
 
@@ -15,101 +17,37 @@ import org.slf4j.Logger
  * API class to interact with the HiddenLayer API
  */
 @CompileDynamic
-class Api {
-
-    Error authenticationError = new Error('Failed to authenticate with hiddenlayer')
+class Api extends BaseClient {
 
     Config config
     Logger log
-
-    Map<String, String> tokenCache = [:]
+    Auth auth
 
     Api(Config config, Logger log) {
+        super(config.apiUrl + '/api/' + config.apiVersion)
+
         this.config = config
         this.log = log
+        this.auth = new Auth(config, log)
     }
 
-    String authenticateWithHiddenLayer() {
-        if (tokenCache.containsKey('token')
-            && tokenCache.containsKey('expires')
-            && tokenCache.expires.isAfter(Instant.now())) {
-            return tokenCache.token
-        }
-
-        if (config.AuthKey == '' || config.AuthKey == null) {
-            return null
-        }
-
-        String authUrl = config.AuthUrl
-        String authKey = config.AuthKey
-        HttpRequest request = newRequestBuilder()
-                .uri(URI.create(authUrl + '/oauth2/token?grant_type=client_credentials'))
-                .header('Authorization', 'Basic ' + authKey)
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build()
-        HttpClient client = HttpClient.newBuilder().build()
-        HttpResponse<String> response
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        } catch (Exception e) {
-            log.error "Failed to authenticate with hiddenlayer: $e"
-            throw e
-        }
-
-        Number responseCode = response.statusCode()
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            log.error "Failed to authenticate with hiddenlayer: $response"
-            return null
-        }
-
-        JsonSlurper jsonSlurper = new JsonSlurper()
-        def jsonResponse = jsonSlurper.parseText(response.body())
-        String accessToken = jsonResponse.access_token as String
-        Number expiresIn = jsonResponse.expires_in as Number
-
-        tokenCache.put('token', accessToken)
-        tokenCache.put('expires', Instant.now().plusSeconds(expiresIn.toLong()))
-        return accessToken
-    }
-
-    String createSensor(Map<String, String> modelInfo) {
-        String apiUrl = config.apiUrl
-        String apiVersion = config.apiVersion
-        String token = authenticateWithHiddenLayer()
-
-        String publisher = modelInfo.model_publisher
-        String name = modelInfo.model_name
-        String version = modelInfo.model_version
-        String file = modelInfo.file_name
+    String createSensor(ModelInfo modelInfo) {
+        String endpoint = '/sensors/create'
+        String token = auth.authenticateWithHiddenLayer()
 
         JsonBuilder requestBody = new JsonBuilder()
-        String sensorName = 'jfrog:' + publisher + '/' + name +  ':' + version + ':' + file
+        String sensorName = modelInfo.toSensorName()
         requestBody {
             plaintext_name sensorName
+            adhoc true
             active true
         }
-        HttpRequest request = newRequestBuilder(token)
-                .uri(URI.create(apiUrl + '/api/' + apiVersion + '/sensors/create'))
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                 .build()
-        HttpClient client = HttpClient.newBuilder().build()
-        HttpResponse<String> response
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        } catch (Exception e) {
-            log.error "Failed to create sensor: $e"
-            throw e
-        }
 
-        Number responseCode = response.statusCode()
-        if (responseCode != HttpURLConnection.HTTP_CREATED) {
-            if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                tokenCache.remove('token')
-                return authenticationError
-            }
-            log.error "Failed to create sensor: $response"
-            return null
-        }
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_CREATED]
+        HttpResponse<String> response = this.sendRequest(request, expectedStatusCodes)
 
         JsonSlurper jsonSlurper = new JsonSlurper()
         def jsonResponse = jsonSlurper.parseText(response.body())
@@ -119,69 +57,80 @@ class Api {
         return jsonResponse.sensor_id as String
     }
 
-    Error createScanRequest(Map<String, String> modelInfo, String sensorId) {
-        String apiUrl = config.apiUrl
-        String apiVersion = config.apiVersion
-        String token = authenticateWithHiddenLayer()
+    /* groovylint-disable-next-line BuilderMethodWithSideEffects */
+    void createScanRequest(ModelInfo modelInfo, String sensorId) {
+        String endpoint = '/scan/create/' + sensorId
+        String token = auth.authenticateWithHiddenLayer()
         JsonBuilder requestBody = new JsonBuilder()
         requestBody {
-            location modelInfo.url
         }
-        HttpRequest request = newRequestBuilder(token)
-                .uri(URI.create(apiUrl + '/api/' + apiVersion + '/scan/create/' + sensorId))
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                 .build()
-        HttpClient client = HttpClient.newBuilder().build()
-        HttpResponse<String> response
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        } catch (Exception e) {
-            log.error "Failed to submit model for scanning: $e"
-            return new Error('Failed to submit model for scanning')
-        }
 
-        Number responseCode = response.statusCode()
-        if (responseCode != HttpURLConnection.HTTP_CREATED) {
-            if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                tokenCache.remove('token')
-                return authenticationError
-            }
-            log.error "Failed to submit model for scanning: $response"
-            return new Error('Failed to submit model for scanning')
-        }
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_CREATED]
+        this.sendRequest(request, expectedStatusCodes)
 
         log.info "Submitted model for scanning: $modelInfo"
         return null
     }
 
-    Map<String, String> requestModelStatus(String sensorId) {
-        String apiUrl = config.apiUrl
-        String apiVersion = config.apiVersion
-        String token = authenticateWithHiddenLayer()
+    MultipartUploadResponse beginMultipartUpload(String sensorId, Long contentLength) {
+        String endpoint = '/sensors/' + sensorId + '/upload/begin'
+        String token = auth.authenticateWithHiddenLayer()
 
-        HttpRequest request = newRequestBuilder(token)
-                .uri(URI.create(apiUrl + '/api/' + apiVersion + '/scan/status/' + sensorId))
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
+                .header('X-Content-Length', String.valueOf(contentLength))
+                .POST(HttpRequest.BodyPublishers.ofString(''))
+                .build()
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_OK]
+
+        HttpResponse<String> response = this.sendRequest(request, expectedStatusCodes)
+
+        JsonSlurper jsonSlurper = new JsonSlurper()
+        def jsonResponse = jsonSlurper.parseText(response.body())
+        return [
+            uploadId: jsonResponse.upload_id,
+            parts: jsonResponse.parts
+        ]
+    }
+
+    void completeMultipartUpload(String sensorId, String uploadId) {
+        String endpoint = '/sensors/' + sensorId + '/upload/' + uploadId + '/complete'
+        String token = auth.authenticateWithHiddenLayer()
+
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
+                .POST(HttpRequest.BodyPublishers.ofString(''))
+                .build()
+
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_NO_CONTENT]
+
+        this.sendRequest(request, expectedStatusCodes)
+    }
+
+    void uploadModelPart(String sensorId, String uploadId, Number part, byte[] data) {
+        String endpoint = '/sensors/' + sensorId + '/upload/' + uploadId + '/part/' + part
+        String token = auth.authenticateWithHiddenLayer()
+
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
+                .header('Content-Type', 'application/octet-stream')
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(data))
+                .build()
+
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_OK]
+        this.sendRequest(request, expectedStatusCodes)
+    }
+
+    ModelStatus requestModelStatus(String sensorId) {
+        String endpoint = '/scan/status/' + sensorId
+        String token = auth.authenticateWithHiddenLayer()
+
+        HttpRequest request = this.newRequestBuilder(endpoint, token)
                 .GET()
                 .build()
-        HttpClient client = HttpClient.newBuilder().build()
-        HttpResponse<String> response
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        } catch (Exception e) {
-            log.error "Failed to get model status: $e"
-            throw e
-        }
 
-        Number responseCode = response.statusCode()
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                tokenCache.remove('token')
-                return authenticationError
-            }
-            log.error "Failed to get model status: $response"
-            /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
-            return null
-        }
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_OK]
+        HttpResponse<String> response = this.sendRequest(request, expectedStatusCodes)
 
         JsonSlurper jsonSlurper = new JsonSlurper()
         def jsonResponse = jsonSlurper.parseText(response.body())
@@ -191,14 +140,17 @@ class Api {
         ]
     }
 
-    private HttpRequest.Builder newRequestBuilder(String token) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .header('Content-Type', 'application/json')
-                .header('Accept', 'application/json')
-        if (token) {
-            builder = builder.header('Authorization', 'Bearer ' + token)
+    protected HttpResponse<String> sendRequest(HttpRequest request, Number[] expectedStatusCodes) {
+        Number[] expectedStatusCodesWithAuthError = expectedStatusCodes + [HttpURLConnection.HTTP_UNAUTHORIZED]
+
+        HttpResponse<String> response = super.sendRequest(request, expectedStatusCodesWithAuthError)
+        // If unauthorized, attempt to re-auth and try again
+        if (response.statusCode() == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            auth.reauthenticateWithHiddenLayer()
+            response = super.sendRequest(request, expectedStatusCodes)
         }
-        return builder
+
+        return response
     }
 
 }

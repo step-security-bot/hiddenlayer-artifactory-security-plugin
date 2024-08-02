@@ -2,11 +2,14 @@ import org.artifactory.repo.RepoPath
 import org.artifactory.request.Request
 
 import hiddenlayer.Api
+import hiddenlayer.Auth
 import hiddenlayer.Config
+import hiddenlayer.models.ModelInfo
 import hiddenlayer.ModelScanner
 
 config = new Config(ctx)
 api = new Api(config, log)
+auth = new Auth(config, log)
 modelScanner = new ModelScanner(config, api, log)
 
 ARTIFACT_STATUS_SAFE = 'SAFE'
@@ -38,7 +41,7 @@ download {
             // so we will let the user decide what to do from here.
 
                 if (config.scanMissingRetry == true) {
-                    modelScanner.startMissingScanOnBackground(request, responseRepoPath)
+                    modelScanner.startMissingScanOnBackground(responseRepoPath)
                 }
                 if (config.scanDecisionMissing == 'deny') {
                     status = HttpURLConnection.HTTP_FORBIDDEN
@@ -59,11 +62,11 @@ download {
 
             log.info "beforeDownload: $responseRepoPath"
 
-            Map<String, String> modelInfo = modelScanner.parseModelInfo(request, responseRepoPath)
+            ModelInfo modelInfo = modelScanner.parseModelInfo(responseRepoPath)
             def properties = repositories.getProperties(responseRepoPath)
             log.info "file: $responseRepoPath properties: $properties"
             def artifactStatus = repositories.getProperties(responseRepoPath).getFirst('hiddenlayer.status')
-            String sensorId = modelScanner.getSensorIdForUrl(modelInfo.url)
+            String sensorId = modelScanner.getSensorIdForUrl(modelInfo.repoPath)
 
             if (artifactStatus == ARTIFACT_STATUS_UNSAFE) {
                 log.warn "Attempted to download unsafe file $responseRepoPath"
@@ -74,7 +77,8 @@ download {
             }
             if (artifactStatus != ARTIFACT_STATUS_SAFE || (artifactStatus == ARTIFACT_STATUS_PENDING && !sensorId)) {
                 repositories.setProperty(responseRepoPath, 'hiddenlayer.status', ARTIFACT_STATUS_PENDING)
-                modelScanner.submitHiddenLayerScan(modelInfo)
+                def content = repositories.getContent(responseRepoPath)
+                modelScanner.submitHiddenLayerScan(modelInfo, content)
                 String modelStatus = modelScanner.getHiddenLayerStatus(modelInfo)
                 if (!modelStatus) {
                     log.error "Failed to get model status for file $responseRepoPath"
@@ -89,6 +93,7 @@ download {
             }
     } catch (Exception e) {
             log.error "Error handling beforeDownload: $e"
+
             throw e
         }
     }
