@@ -1,5 +1,11 @@
 package hiddenlayer.models
 
+import groovy.transform.CompileDynamic
+
+/**
+ * MultipartUploadPart class to store multipart upload part information
+ */
+@CompileDynamic
 class MultipartUploadPart {
 
     // Property naming does not follow conventions used in other models because this is representing a JSON object

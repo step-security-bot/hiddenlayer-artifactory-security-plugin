@@ -4,13 +4,15 @@ import groovy.transform.CompileDynamic
 
 import hiddenlayer.models.ModelInfo
 import hiddenlayer.models.ModelStatus
+import hiddenlayer.models.MultipartUploadPart
+import hiddenlayer.models.MultipartUploadResponse
 
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
 import org.artifactory.repo.RepoPath
-import org.artifactory.request.Request
+import org.artifactory.resource.ResourceStreamHandle
 
 import org.slf4j.Logger
 import java.security.SecureRandom
@@ -24,12 +26,14 @@ class ModelScanner {
     Config config
     Api api
     Logger log
+    Boolean isSaaS
     Map<String, String> sensorCache = [:]
 
     ModelScanner(Config config, Api api, Logger log) {
         this.config = config
         this.api = api
         this.log = log
+        this.isSaaS = api.isSaaS()
     }
 
     static ModelInfo parseModelInfo(RepoPath modelPath) {
@@ -61,12 +65,13 @@ class ModelScanner {
 
     boolean shouldScanRepo(String repoKey) {
         try {
+            String keyToCheck = repoKey
             String[] scanRepos = config.scanRepos
             if (repoKey.endsWith('-cache')) {
-                repoKey = repoKey.substring(0, repoKey.length() - 6)
+                keyToCheck = repoKey.substring(0, repoKey.length() - 6)
             }
 
-            return scanRepos && scanRepos.contains(repoKey)
+            return scanRepos && scanRepos.contains(keyToCheck)
         } catch (Exception e) {
             log.error "Error checking if repo should be scanned: $e"
             throw e
@@ -98,53 +103,12 @@ class ModelScanner {
         return modelStatus
     }
 
-    void submitHiddenLayerScan(ModelInfo modelInfo, content) {
-        // create sensor
-        String sensorId = api.createSensor(modelInfo)
-        if (sensorId == Auth.authenticationError) {
-            // retry once if authentication failed
-            sensorId = api.createSensor(modelInfo)
+    void submitHiddenLayerScan(ModelInfo modelInfo, ResourceStreamHandle content) {
+        if (this.isSaaS) {
+            submitHiddenLayerScanToSaaSScanner(modelInfo, content)
+        } else {
+            submitHiddenLayerScanToEnterpriseScanner(modelInfo, content)
         }
-        if (!sensorId) {
-            // todo: handle error
-            throw new Exception('Failed to create sensor')
-        }
-        sensorCache.put(modelInfo.repoPath, sensorId)
-
-        def upload = api.beginMultipartUpload(sensorId, content.size)
-        def inputStream = content.getInputStream()
-        for (Number i = 0; i < upload.parts.size(); i++) {
-            def part = upload.parts[i]
-            def partSize = part.end_offset - part.start_offset
-            def buffer = new byte[partSize]
-            byte[] bytes = inputStream.readNBytes(partSize)
-            if (part.upload_url) {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(part.upload_url))
-                        .header('Content-Type', 'application/octet-stream')
-                        .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes))
-                        .build()
-                HttpClient client = HttpClient.newBuilder().build()
-                HttpResponse<String> response
-                try {
-                    response = client.send(request, HttpResponse.BodyHandlers.ofString())
-                } catch (Exception e) {
-                    log.error "Failed to upload model part: $e"
-                    throw e
-                }
-
-                Number responseCode = response.statusCode()
-                if (responseCode != HttpURLConnection.HTTP_OK) {
-                    log.error "Failed to upload model part: $response"
-                    /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
-                    throw new Exception("Failed to upload model part: $response")
-                }
-            } else {
-                api.uploadModelPart(sensorId, upload.uploadId, part.part_number, buffer)
-            }
-        }
-        api.completeMultipartUpload(sensorId, upload.uploadId)
-        api.createScanRequest(modelInfo, sensorId)
     }
 
     String getHiddenLayerStatus(ModelInfo modelInfo) {
@@ -183,6 +147,62 @@ class ModelScanner {
                 api.deleteModel(sensorId)
             }
         }
+    }
+
+    private void submitHiddenLayerScanToSaaSScanner(ModelInfo modelInfo, ResourceStreamHandle content) {
+        // create sensor
+        String sensorId = api.createSensor(modelInfo)
+        if (sensorId == Auth.authenticationError) {
+            // retry once if authentication failed
+            sensorId = api.createSensor(modelInfo)
+        }
+        if (!sensorId) {
+            // todo: handle error
+            throw new Exception('Failed to create sensor')
+        }
+        sensorCache.put(modelInfo.repoPath, sensorId)
+
+        MultipartUploadResponse upload = api.beginMultipartUpload(sensorId, content.size)
+        InputStream inputStream = content.inputStream
+        for (Number i = 0; i < upload.parts.size(); i++) {
+            MultipartUploadPart part = upload.parts[i]
+            Number partSize = part.end_offset - part.start_offset
+            byte[] buffer = new byte[partSize]
+            byte[] bytes = inputStream.readNBytes(partSize)
+            if (part.upload_url) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(part.upload_url))
+                        .header('Content-Type', 'application/octet-stream')
+                        .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes))
+                        .build()
+                HttpClient client = HttpClient.newBuilder().build()
+                HttpResponse<String> response
+                try {
+                    response = client.send(request, HttpResponse.BodyHandlers.ofString())
+                } catch (Exception e) {
+                    log.error "Failed to upload model part: $e"
+                    throw e
+                }
+
+                Number responseCode = response.statusCode()
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    log.error "Failed to upload model part: $response"
+                    /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
+                    throw new Exception("Failed to upload model part: $response")
+                }
+            } else {
+                api.uploadModelPart(sensorId, upload.uploadId, part.part_number, buffer)
+            }
+        }
+        api.completeMultipartUpload(sensorId, upload.uploadId)
+        api.createScanRequest(modelInfo, sensorId)
+    }
+
+    private void submitHiddenLayerScanToEnterpriseScanner(ModelInfo modelInfo, ResourceStreamHandle content) {
+        String sensorId = UUID.randomUUID()
+        sensorCache.put(modelInfo.repoPath, sensorId)
+
+        api.submitEnterpriseScanRequest(modelInfo, sensorId, content.inputStream)
     }
 
 }

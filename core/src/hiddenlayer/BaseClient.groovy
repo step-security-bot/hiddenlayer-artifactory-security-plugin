@@ -18,6 +18,11 @@ class BaseClient {
         this.apiPrefix = apiPrefix
     }
 
+    Boolean isSaaS() {
+        URL url = new URL(apiPrefix)
+        return url.host.endsWith('hiddenlayer.ai')
+    }
+
     protected HttpRequest.Builder newRequestBuilder(String endpoint, String token) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(apiPrefix + endpoint))
@@ -40,8 +45,9 @@ class BaseClient {
         }
 
         Number responseCode = response.statusCode()
+        String body = response.body()
         if (!expectedStatusCodes.contains(responseCode)) {
-            log.error "Failed to send request $request: $response"
+            log.error "Failed to send request $request: $response $body"
             throw new Exception("Failed to send request $request: $response")
         }
 

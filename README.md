@@ -69,6 +69,14 @@ gradle modelscanner
 The `artifactory_common` set of tests will check the health of JFrog artifactory and install the license set in the environment variable `HL_LICENSE_KEY`.
 The `modelscanner` set of tests will set up a remote huggingface repository and attempt to download a huggingface model from it.
 
+### Environment variables
+
+The following environment variables can be configured and override the values in the `core/src/hiddenlayer.properties` file:
+
+* HL_CLIENT_ID - The client ID for the HiddenLayer API
+* HL_CLIENT_SECRET - The client secret for the HiddenLayer API
+* HL_LICENSE_KEY - The license key for JFrog Artifactory
+* HL_API_URL - The URL for the HiddenLayer API
 
 ## Resources
 

@@ -2,13 +2,15 @@
     "name": "groovy",
     "build": {
         "dockerfile": "Dockerfile",
-        "args": {},
+        "args": {}
     },
     "runArgs": ["--init", "--privileged"],
     "overrideCommand": false,
     "remoteEnv": {
         "HL_CLIENT_ID": "${localEnv:HL_CLIENT_ID}",
         "HL_CLIENT_SECRET": "${localEnv:HL_CLIENT_SECRET}",
+        "QUAY_USERNAME": "${localEnv:QUAY_USERNAME}",
+        "QUAY_PASSWORD": "${localEnv:QUAY_PASSWORD}",
         "RT_LICENSE_KEY": "${localEnv:RT_LICENSE_KEY}"
     },
     "remoteUser": "vscode",

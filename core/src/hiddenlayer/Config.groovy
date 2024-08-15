@@ -39,7 +39,9 @@ class Config {
         String hlauth = Base64.encoder.encodeToString((clientId + ':' + clientSecret).bytes)
         authKey = hlauth
         authUrl = auth.get('url') as String
-        apiUrl = api.get('url') as String
+        apiUrl = System.getenv('HL_API_URL') != null && System.getenv('HL_API_URL') != ''
+            ? System.getenv('HL_API_URL')
+            : api.get('url') as String
         String version = api.get('version') as String
         apiVersion = version ?: 'v2'
         String repos = scan.get('repo_ids') as String

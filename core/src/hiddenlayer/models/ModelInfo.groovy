@@ -1,5 +1,11 @@
 package hiddenlayer.models
 
+import groovy.transform.CompileDynamic
+
+/**
+ * ModelInfo class to store model information
+ */
+@CompileDynamic
 class ModelInfo {
 
     String modelPublisher

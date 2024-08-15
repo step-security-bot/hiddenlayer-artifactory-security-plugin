@@ -11,6 +11,8 @@ import hiddenlayer.models.MultipartUploadResponse
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
+import java.util.function.Supplier
+
 import org.slf4j.Logger
 
 /**
@@ -22,6 +24,7 @@ class Api extends BaseClient {
     Config config
     Logger log
     Auth auth
+    Boolean isSaaS
 
     Api(Config config, Logger log) {
         super(config.apiUrl + '/api/' + config.apiVersion)
@@ -29,6 +32,7 @@ class Api extends BaseClient {
         this.config = config
         this.log = log
         this.auth = new Auth(config, log)
+        this.isSaaS = super.isSaaS()
     }
 
     String createSensor(ModelInfo modelInfo) {
@@ -61,6 +65,7 @@ class Api extends BaseClient {
     void createScanRequest(ModelInfo modelInfo, String sensorId) {
         String endpoint = '/scan/create/' + sensorId
         String token = auth.authenticateWithHiddenLayer()
+
         JsonBuilder requestBody = new JsonBuilder()
         requestBody {
         }
@@ -72,7 +77,29 @@ class Api extends BaseClient {
         this.sendRequest(request, expectedStatusCodes)
 
         log.info "Submitted model for scanning: $modelInfo"
-        return null
+    }
+
+    void submitEnterpriseScanRequest(ModelInfo modelInfo, String sensorId, InputStream inputStream) {
+        String endpoint = '/create/' + sensorId
+
+        Supplier<InputStream> streamSupplier = new Supplier<InputStream>() {
+
+            @Override
+            InputStream get() {
+                return inputStream
+            }
+
+        }
+
+        HttpRequest request = this.newRequestBuilder(endpoint, null)
+                .setHeader('Content-Type', 'application/octet-stream')
+                .POST(HttpRequest.BodyPublishers.ofInputStream(streamSupplier))
+                .build()
+
+        Number[] expectedStatusCodes = [HttpURLConnection.HTTP_CREATED]
+        this.sendRequest(request, expectedStatusCodes)
+
+        log.info "Submitted model for scanning: $modelInfo"
     }
 
     MultipartUploadResponse beginMultipartUpload(String sensorId, Long contentLength) {
@@ -122,8 +149,12 @@ class Api extends BaseClient {
     }
 
     ModelStatus requestModelStatus(String sensorId) {
-        String endpoint = '/scan/status/' + sensorId
-        String token = auth.authenticateWithHiddenLayer()
+        String endpoint = this.isSaaS ? '/scan/status/' + sensorId : '/status/' + sensorId
+        String token = null
+        if (this.isSaaS) {
+            // We don't need to authenticate if this is an Enterprise Model Scanner
+            token = auth.authenticateWithHiddenLayer()
+        }
 
         HttpRequest request = this.newRequestBuilder(endpoint, token)
                 .GET()

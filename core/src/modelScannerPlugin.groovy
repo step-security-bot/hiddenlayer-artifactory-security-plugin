@@ -86,7 +86,7 @@ download {
                 }
                 log.debug "file: $responseRepoPath status: $modelStatus"
                 repositories.setProperty(responseRepoPath, 'hiddenlayer.status', modelStatus)
-                if (config.deleteAfterScan) {
+                if (config.deleteAfterScan && api.isSaaS()) {
                     sensorId = modelScanner.getSensorIdForUrl(modelInfo.repoPath)
                     api.deleteModel(sensorId)
                 }
