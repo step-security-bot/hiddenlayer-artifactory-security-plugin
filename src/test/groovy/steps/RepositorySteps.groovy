@@ -1,11 +1,12 @@
 package steps
 
-import tests.TestSetup
-
 import static io.restassured.RestAssured.given
 
+import tests.TestSetup
+
 class RepositorySteps extends TestSetup {
-    static def getHealthCheckResponse(artifactoryURL) {
+
+    static getHealthCheckResponse(artifactoryURL) {
         return given()
                 .when()
                 .get("${artifactoryURL}/router/api/v1/system/health")
@@ -13,7 +14,7 @@ class RepositorySteps extends TestSetup {
                 .extract().response()
     }
 
-    static def ping(artifactoryURL) {
+    static ping(artifactoryURL) {
         return given()
                 .when()
                 .get("${artifactoryURL}/api/system/ping")
@@ -21,13 +22,13 @@ class RepositorySteps extends TestSetup {
                 .extract().response()
     }
 
-    static def setBaseUrl(artifactoryURL, username, password, String baseUrl) {
+    static setBaseUrl(artifactoryURL, username, password, String baseUrl) {
         return given()
                 .auth()
                 .preemptive()
                 .basic(username, password)
-                .header("Cache-Control", "no-cache")
-                .header("content-Type", "text/plain")
+                .header('Cache-Control', 'no-cache')
+                .header('content-Type', 'text/plain')
                 .body(baseUrl)
                 .when()
                 .put("${artifactoryURL}/api/system/configuration/baseUrl")
@@ -35,13 +36,13 @@ class RepositorySteps extends TestSetup {
                 .extract().response()
     }
 
-    static def createRepository(artifactoryURL, username, password, repoKey, body) {
+    static createRepository(artifactoryURL, username, password, repoKey, body) {
         return given()
                 .auth()
                 .preemptive()
                 .basic(username, password)
-                .header("Cache-Control", "no-cache")
-                .header("content-Type", "application/json")
+                .header('Cache-Control', 'no-cache')
+                .header('content-Type', 'application/json')
                 .body(body)
                 .when()
                 .put("${artifactoryURL}/api/repositories/${repoKey}")
@@ -49,15 +50,41 @@ class RepositorySteps extends TestSetup {
                 .extract().response()
     }
 
-    static def getInfo(artifactoryURL, username, password, path) {
+    static getInfo(artifactoryURL, username, password, path) {
         return given()
                 .auth()
                 .preemptive()
                 .basic(username, password)
-                .header("Cache-Control", "no-cache")
-                .header("Content-Type", "application/json")
+                .header('Cache-Control', 'no-cache')
+                .header('Content-Type', 'application/json')
                 .when()
-                .get("${artifactoryURL}/api/storage/" + path + "?properties")
+                .get("${artifactoryURL}/api/storage/" + path + '?properties')
+                .then()
+                .extract().response()
+    }
+
+    static deleteProperties(artifactoryURL, username, password, path, properties) {
+        return given()
+                .auth()
+                .preemptive()
+                .basic(username, password)
+                .header('Cache-Control', 'no-cache')
+                .header('Content-Type', 'application/json')
+                .when()
+                .delete("${artifactoryURL}/api/storage/" + path + '?properties=' + properties)
+                .then()
+                .extract().response()
+    }
+
+    static copyArtifact(artifactoryURL, username, password, srcRepoKey, srcFilePath, destRepoKey) {
+        return given()
+                .auth()
+                .preemptive()
+                .basic(username, password)
+                .header('Cache-Control', 'no-cache')
+                .header('content-Type', 'application/json')
+                .body('')
+                .post("${artifactoryURL}/api/copy/${srcRepoKey}/${srcFilePath}?to=/${destRepoKey}/${srcFilePath}")
                 .then()
                 .extract().response()
     }
