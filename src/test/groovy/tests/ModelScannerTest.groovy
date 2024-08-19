@@ -12,20 +12,36 @@ import org.testng.annotations.Test
 import steps.RepositorySteps
 import steps.SecuritySteps
 
-class ModelScannerTest extends RepositorySteps {
+abstract class ModelScannerTest extends RepositorySteps {
 
     def artifactoryURL = "${artifactoryBaseURL}/artifactory"
     def securitySteps = new SecuritySteps()
 
-    @Test(priority=0, groups='model-scanner', testName = 'Set up Remote HuggingFace repo')
-    void setupRemoteHuggingFaceRepoTest() {
+    private String repoType
+    private String repoKey
+    private String remoteUrl
+
+    String safeModel = 'prajjwal1/bert-tiny'
+    private String safeFile = 'resolve/4746226cbb28f1e1c99977204b3ac22ecfe3a072/pytorch_model.bin'
+    String unsafeModel = 'matanby/unsafe-diffusion'
+    private String unsafeFile = 'resolve/243eb928376792047369d2ef072d03528c611909/diffusion_pytorch_model.bin'
+
+    ModelScannerTest(String repoType, String repoKey, String remoteUrl) {
+        this.repoType = repoType
+        this.repoKey = repoKey
+        this.remoteUrl = remoteUrl
+    }
+
+    @Test(priority=0, groups='model-scanner', testName = 'Set up HuggingFace repo')
+    void setupHuggingFaceRepoTest() {
+        Reporter.log("- Test: Set up $this.repoType HuggingFace repo", true)
         String body = JsonOutput.toJson([
-            key: 'hf',
-            rclass: 'remote',
+            key: repoKey,
+            rclass: repoType.toLowerCase(),
             packageType: 'huggingfaceml',
-            url: 'https://huggingface.co'
+            url: remoteUrl
         ])
-        Response response = createRepository(artifactoryURL, username, password, 'hf', body)
+        Response response = createRepository(artifactoryURL, username, password, repoKey, body)
         if (response.getStatusCode() == 200) {
             Reporter.log('- HuggingFace repository created successfully', true)
         } else if (response.getStatusCode() == 400 && response.body().asString().contains('Case insensitive repository key already exists')) {
@@ -37,98 +53,53 @@ class ModelScannerTest extends RepositorySteps {
         }
     }
 
-    @Test(priority=1, groups='model-scanner', testName = 'Download model from Remote HuggingFace Repo')
-    void downloadModelFromRemoteHuggingFaceTest() {
-        downloadModelTest('hf', 'prajjwal1/bert-tiny', 'resolve/4746226cbb28f1e1c99977204b3ac22ecfe3a072/pytorch_model.bin', true)
+    @Test(priority=1, groups='model-scanner', testName = 'Repo setup')
+    void setupRepoForDownloadModelTests() {
     }
 
-    @Test(priority=2, groups='model-scanner', testName = 'Download unsafe file is prevented from Remote HuggingFace Repo')
-    void downloadUnsafeModelFromRemoteHuggingFaceTest() {
-        downloadModelTest('hf', 'matanby/unsafe-diffusion', 'resolve/243eb928376792047369d2ef072d03528c611909/diffusion_pytorch_model.bin', false)
+    @Test(priority=2, groups='model-scanner', testName = 'Download model from HuggingFace Repo')
+    void downloadModelFromHuggingFaceTest() {
+        Reporter.log("- Test: Download model from $this.repoType HuggingFace Repo", true)
+        downloadModelTest(repoKey, safeModel, safeFile, true)
     }
 
-    @Test(priority=3, groups='model-scanner', testName = 'Scan results are saved as properties')
+    @Test(priority=3, groups='model-scanner', testName = 'Download unsafe file is prevented from HuggingFace Repo')
+    void downloadUnsafeModelFromHuggingFaceTest() {
+        Reporter.log("- Test: Download unsafe file from $this.repoType HuggingFace Repo", true)
+        downloadModelTest(repoKey, unsafeModel, unsafeFile, false)
+    }
+
+    @Test(priority=4, groups='model-scanner', testName = 'Scan results are saved as properties')
     void scanResultsAreSavedAsPropertiesTest() {
-        def safePath = 'hf-cache/models/prajjwal1/bert-tiny/main/2021-10-27T18:29:01.000Z/pytorch_model.bin'
+        Reporter.log("- Test: Scan results are saved as properties for $this.repoType repo", true)
+        def safePath = getSafePath()
         Response response = getInfo(artifactoryURL, username, password, safePath)
         response.then().assertThat().log().ifValidationFails().statusCode(200)
                 .body("properties['hiddenlayer.status'][0]", equalTo('SAFE'))
-        def unsafePath = 'hf-cache/models/matanby/unsafe-diffusion/243eb928376792047369d2ef072d03528c611909/2024-03-19T19:05:00.000Z/diffusion_pytorch_model.bin'
+        def unsafePath = getUnsafePath()
         response = getInfo(artifactoryURL, username, password, unsafePath)
         response.then().assertThat().log().ifValidationFails().statusCode(200)
                 .body("properties['hiddenlayer.status'][0]", equalTo('UNSAFE'))
     }
-
-    @Test(priority=4, groups='model-scanner', testName = 'Set up Local HuggingFace repo')
-    void setupLocalHuggingFaceRepoTest() {
-        String body = JsonOutput.toJson([
-            key: 'hf-local',
-            rclass: 'local',
-            packageType: 'huggingfaceml'
-        ])
-        Response response = createRepository(artifactoryURL, username, password, 'hf-local', body)
-        if (response.getStatusCode() == 200) {
-            Reporter.log('- Local HuggingFace repository created successfully', true)
-        } else if (response.getStatusCode() == 400 && response.body().asString().contains('Case insensitive repository key already exists')) {
-            Reporter.log('- Local HuggingFace repository already exists', true)
-        } else {
-            Reporter.log('- Local HuggingFace repository creation failed', true)
-            Reporter.log("- Response: ${response.body().asString()}", true)
-            Assert.fail()
-        }
+    @Test(priority=5, groups='model-scanner', testName = 'Subsequent download attempts are determined using hiddenlayer status property')
+    void downloadScannedModelFromRemoteHuggingFaceTest() {
+        Reporter.log("- Test: Subsequent download attempts are determined using hiddenlayer status property in $this.repoType repo", true)
+        downloadModelTest(repoKey, safeModel, safeFile, true)
+        downloadModelTest(repoKey, unsafeModel, unsafeFile, false)
     }
 
-    @Test(priority=5, groups='model-scanner', testName = 'Populate models in Local HuggingFace repo')
-    void populateModelsInLocalHuggingFaceRepoTest() {
-        String model = 'models/prajjwal1/bert-tiny'
-        Response response = copyArtifact(artifactoryURL, username, password, 'hf-cache', 'models/prajjwal1/bert-tiny', 'hf-local')
-        if (response.getStatusCode() == 200) {
-            Reporter.log('- Safe model copied to Local HuggingFace repository successfully', true)
-        } else {
-            Reporter.log('- Safe model copy to Local HuggingFace repository failed', true)
-            Reporter.log("- Response: ${response.body().asString()}", true)
-            Assert.fail()
-        }
-
-        model = 'models/matanby/unsafe-diffusion'
-        response = copyArtifact(artifactoryURL, username, password, 'hf-cache', model, 'hf-local')
-        if (response.getStatusCode() == 200) {
-            Reporter.log('- Unsafe model copied to Local HuggingFace repository successfully', true)
-        } else {
-            Reporter.log('- Unsafe model copy to Local HuggingFace repository failed', true)
-            Reporter.log("- Response: ${response.body().asString()}", true)
-            Assert.fail()
-        }
+    String getSafePath() {
+        return "$repoKey/models/$safeModel/main/2021-10-27T18:29:01.000Z/pytorch_model.bin"
     }
 
-    @Test(priority=6, groups='model-scanner', testName = 'Copied models should not have hiddenlayer status properties yet')
-    void validateCopiedModelsDonNotHaveHiddenLayerStatusProperties() {
-        def safePath = 'hf-local/models/prajjwal1/bert-tiny/main/2021-10-27T18:29:01.000Z/pytorch_model.bin'
-        Response response = deleteProperties(artifactoryURL, username, password, safePath, 'hiddenlayer.status')
-        response = getInfo(artifactoryURL, username, password, safePath)
-        response.then().assertThat().log().ifValidationFails().statusCode(200)
-                .body("properties['hiddenlayer.status']", nullValue())
-        def unsafePath = 'hf-local/models/matanby/unsafe-diffusion/243eb928376792047369d2ef072d03528c611909/2024-03-19T19:05:00.000Z/diffusion_pytorch_model.bin'
-        response = deleteProperties(artifactoryURL, username, password, unsafePath, 'hiddenlayer.status')
-        response = getInfo(artifactoryURL, username, password, unsafePath)
-        response.then().assertThat().log().ifValidationFails().statusCode(200)
-                .body("properties['hiddenlayer.status']", nullValue())
-    }
-
-    @Test(priority=7, groups='model-scanner', testName = 'Download model from Local HuggingFace Repo')
-    void downloadModelFromLocalHuggingFaceTest() {
-        downloadModelTest('hf-local', 'prajjwal1/bert-tiny', 'resolve/4746226cbb28f1e1c99977204b3ac22ecfe3a072/pytorch_model.bin', true)
-    }
-
-    @Test(priority=8, groups='model-scanner', testName = 'Download unsafe file is prevented from Local HuggingFace Repo')
-    void downloadUnsafeModelFromLocalHuggingFaceTest() {
-        downloadModelTest('hf-local', 'matanby/unsafe-diffusion', 'resolve/243eb928376792047369d2ef072d03528c611909/diffusion_pytorch_model.bin', false)
+    String getUnsafePath() {
+        return "$repoKey/models/$unsafeModel/243eb928376792047369d2ef072d03528c611909/2024-03-19T19:05:00.000Z/diffusion_pytorch_model.bin"
     }
 
     void downloadModelTest(repo, model, file, isFileSafe) {
         Response response = securitySteps.createToken(artifactoryBaseURL, username, password)
         String token = ''
-        if (response.getStatusCode() == 200) {
+        if (response.statusCode == 200) {
             Reporter.log('- Token created successfully', true)
             token = response.jsonPath().getString('reference_token')
         } else {
@@ -144,50 +115,31 @@ class ModelScannerTest extends RepositorySteps {
                 .then()
                 .extract().response()
 
-        if (response.getStatusCode() == 200) {
+        if (response.statusCode == 200) {
             Reporter.log('- Model downloaded successfully', true)
-            Reporter.log("- Response: ${response.body().asString()}", true)
         } else {
             Reporter.log('- Model download failed', true)
             Reporter.log("- Response: ${response.body().asString()}", true)
             Assert.fail()
         }
 
-        def maxRetries = 5
-        def retryCount = 0
-
-        // Retry downloading the file if it is not safe
-        // The first download will succeed, but once the scan comes back, the download should be blocked.
-        while (retryCount < maxRetries) {
-            response = given()
+        response = given()
                     .header('Authorization', "Bearer ${token}")
                     .when()
                     .get("${artifactURL}/artifactory/api/huggingfaceml/${repo}/${model}/${file}")
                     .then()
                     .extract().response()
 
-            if (response.getStatusCode() == 200) {
-                Reporter.log('- File downloaded successfully', true)
-                if (isFileSafe) {
-                    // We expect to be able to download the file. That expectation is met and we can early return
-                    return
-                }
-            } else if (response.getStatusCode() == 403 && !isFileSafe) {
-                // Unsafe file has been blocked. We can early return
-                Reporter.log('- File download prevented as expected', true)
-                return
-            } else {
-                Reporter.log('- File download failed', true)
-                Reporter.log("- Response: ${response.body().asString()}", true)
-                Assert.fail()
-            }
-            // Wait for 5 seconds before retrying
-            Thread.sleep(5000)
-            retryCount++
+        if (response.statusCode == 200) {
+            Reporter.log('- File downloaded successfully', true)
+            Assert.assertTrue(isFileSafe)
+        } else if (response.getStatusCode() == 403 && !isFileSafe) {
+            Reporter.log('- File download prevented', true)
+            Assert.assertFalse(isFileSafe)
+        } else {
+            Reporter.log('- File download failed', true)
+            Reporter.log("- Response: ${response.body().asString()}", true)
+            Assert.fail()
         }
-        // We should not reach here. If we do, we have retried 5 times without hitting our expected condition
-        Reporter.log("- Expected condition not met after ${maxRetries} retries", true)
-        Assert.fail()
     }
-
 }

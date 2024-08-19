@@ -1,3 +1,4 @@
+import org.artifactory.exception.CancelException
 import org.artifactory.repo.RepoPath
 import org.artifactory.request.Request
 
@@ -18,10 +19,16 @@ ARTIFACT_STATUS_PENDING = 'PENDING'
 
 download {
     altResponse { Request request, RepoPath responseRepoPath ->
+        log.info "altResponse: $responseRepoPath"
         try {
             if (!modelScanner.shouldScanRepo(responseRepoPath.repoKey)) {
                 return
             }
+
+            def repoConfig = repositories.getRepositoryConfiguration(responseRepoPath.repoKey)
+            def packageType = repoConfig.getPackageType()
+            def type = repoConfig.getType()
+            log.info "altResponse: repo config: $type $packageType"
 
             def artifactStatus = repositories.getProperties(responseRepoPath).getFirst('hiddenlayer.status')
             log.info "file: $responseRepoPath status: $artifactStatus"
@@ -35,26 +42,23 @@ download {
             }
 
             if (artifactStatus != ARTIFACT_STATUS_SAFE) {
-                log.error("Artifact is not in an expected state: $artifactStatus")
-            // we should not be here, but here we are!
-            // this means the model was allowed to download without a decision from hiddenlayer,
-            // so we will let the user decide what to do from here.
+                // altResponse is called first, then beforeDownload is called
+                // If we get to hear, we have not started a scan yet and should allow altResponse to proceed so
+                // that beforeDownload is called.
+                // beforeDownload will throw a CancelException if needed based on scan results
+                // If it cannot determine the scan results and config.scanDecisionMissing is 'deny', 
+                // it will throw a CancelException
 
-                if (config.scanMissingRetry == true) {
-                    modelScanner.startMissingScanOnBackground(responseRepoPath)
-                }
-                if (config.scanDecisionMissing == 'deny') {
-                    status = HttpURLConnection.HTTP_FORBIDDEN
-                    message = 'Artifact has not been scanned by hiddenlayer'
-                }
+                log.info('Artifact has not been scanned yet')
             }
-    } catch (Exception e) {
+        } catch (Exception e) {
             log.error "Error handling altResponse: $e"
             throw e
         }
     }
 
     beforeDownload { Request request, RepoPath responseRepoPath ->
+        log.info "beforeDownload: $responseRepoPath"
         try {
             if (!modelScanner.shouldScanRepo(responseRepoPath.repoKey)) {
                 return
@@ -70,19 +74,27 @@ download {
 
             if (artifactStatus == ARTIFACT_STATUS_UNSAFE) {
                 log.warn "Attempted to download unsafe file $responseRepoPath"
-                return new Error('Artifact is unsafe')
+                throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_FORBIDDEN)
             }
             if (artifactStatus == ARTIFACT_STATUS_PENDING && sensorId) {
-                return new Error('Artifact is being scanned by hiddenlayer')
+                throw new CancelException('Artifact is being scanned by hiddenlayer', HttpURLConnection.HTTP_FORBIDDEN)
             }
             if (artifactStatus != ARTIFACT_STATUS_SAFE || (artifactStatus == ARTIFACT_STATUS_PENDING && !sensorId)) {
+                // Artifact has not been scanned. Starting the scan process.
+
                 repositories.setProperty(responseRepoPath, 'hiddenlayer.status', ARTIFACT_STATUS_PENDING)
                 def content = repositories.getContent(responseRepoPath)
                 modelScanner.submitHiddenLayerScan(modelInfo, content)
                 String modelStatus = modelScanner.getHiddenLayerStatus(modelInfo)
                 if (!modelStatus) {
                     log.error "Failed to get model status for file $responseRepoPath"
-                    return new Error('Failed to get model status')
+                    if (config.scanMissingRetry == true) {
+                        modelScanner.startMissingScanOnBackground(responseRepoPath)
+                    }
+                    if (config.scanDecisionMissing == 'deny') {
+                        throw new CancelException('Artifact has not been scanned by hiddenlayer', HttpURLConnection.HTTP_FORBIDDEN)
+                    }
+                    return
                 }
                 log.debug "file: $responseRepoPath status: $modelStatus"
                 repositories.setProperty(responseRepoPath, 'hiddenlayer.status', modelStatus)
@@ -92,10 +104,10 @@ download {
                 }
                 if (modelStatus == ARTIFACT_STATUS_UNSAFE) {
                     log.warn "Attempted to download unsafe file $responseRepoPath"
-                    return new Error('Artifact is unsafe')
+                    throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_FORBIDDEN)
                 }
             }
-    } catch (Exception e) {
+        } catch (Exception e) {
             log.error "Error handling beforeDownload: $e"
 
             throw e
