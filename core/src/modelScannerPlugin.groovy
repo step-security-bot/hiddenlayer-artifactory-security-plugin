@@ -43,7 +43,7 @@ download {
 
             if (artifactStatus != ARTIFACT_STATUS_SAFE) {
                 // altResponse is called first, then beforeDownload is called
-                // If we get to hear, we have not started a scan yet and should allow altResponse to proceed so
+                // If we get to here, we have not started a scan yet and should allow altResponse to proceed so
                 // that beforeDownload is called.
                 // beforeDownload will throw a CancelException if needed based on scan results
                 // If it cannot determine the scan results and config.scanDecisionMissing is 'deny', 

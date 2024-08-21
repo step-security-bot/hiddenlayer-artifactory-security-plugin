@@ -49,7 +49,7 @@ class Config {
         scanDecisionMissing = scan.get('decision_missing') as String
         String retry = scan.get('missing_decision_retry') as String
         scanMissingRetry = retry != 'false'
-        String delete = scan.get('delete_after_scan') as String
+        String delete = scan.get('delete_adhoc_models_after_scan') as String
         deleteAfterScan = delete != 'false'
     }
 
