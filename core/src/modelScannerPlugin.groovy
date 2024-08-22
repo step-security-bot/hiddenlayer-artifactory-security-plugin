@@ -33,11 +33,11 @@ download {
             def artifactStatus = repositories.getProperties(responseRepoPath).getFirst('hiddenlayer.status')
             log.info "file: $responseRepoPath status: $artifactStatus"
             if (artifactStatus == ARTIFACT_STATUS_UNSAFE) {
-                status = HttpURLConnection.HTTP_FORBIDDEN
+                status = HttpURLConnection.HTTP_NOT_FOUND
                 message = 'Artifact is unsafe'
             }
             if (artifactStatus == ARTIFACT_STATUS_PENDING) {
-                status = HttpURLConnection.HTTP_FORBIDDEN
+                status = HttpURLConnection.HTTP_NOT_FOUND
                 message = 'Artifact is being scanned by hiddenlayer'
             }
 
@@ -64,8 +64,6 @@ download {
                 return
             }
 
-            log.info "beforeDownload: $responseRepoPath"
-
             ModelInfo modelInfo = modelScanner.parseModelInfo(responseRepoPath)
             def properties = repositories.getProperties(responseRepoPath)
             log.info "file: $responseRepoPath properties: $properties"
@@ -74,10 +72,10 @@ download {
 
             if (artifactStatus == ARTIFACT_STATUS_UNSAFE) {
                 log.warn "Attempted to download unsafe file $responseRepoPath"
-                throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_FORBIDDEN)
+                throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_NOT_FOUND)
             }
             if (artifactStatus == ARTIFACT_STATUS_PENDING && sensorId) {
-                throw new CancelException('Artifact is being scanned by hiddenlayer', HttpURLConnection.HTTP_FORBIDDEN)
+                throw new CancelException('Artifact is being scanned by hiddenlayer', HttpURLConnection.HTTP_NOT_FOUND)
             }
             if (artifactStatus != ARTIFACT_STATUS_SAFE || (artifactStatus == ARTIFACT_STATUS_PENDING && !sensorId)) {
                 // Artifact has not been scanned. Starting the scan process.
@@ -92,7 +90,7 @@ download {
                         modelScanner.startMissingScanOnBackground(responseRepoPath)
                     }
                     if (config.scanDecisionMissing == 'deny') {
-                        throw new CancelException('Artifact has not been scanned by hiddenlayer', HttpURLConnection.HTTP_FORBIDDEN)
+                        throw new CancelException('Artifact has not been scanned by hiddenlayer', HttpURLConnection.HTTP_NOT_FOUND)
                     }
                     return
                 }
@@ -104,7 +102,7 @@ download {
                 }
                 if (modelStatus == ARTIFACT_STATUS_UNSAFE) {
                     log.warn "Attempted to download unsafe file $responseRepoPath"
-                    throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_FORBIDDEN)
+                    throw new CancelException('Artifact is unsafe', HttpURLConnection.HTTP_NOT_FOUND)
                 }
             }
         } catch (Exception e) {

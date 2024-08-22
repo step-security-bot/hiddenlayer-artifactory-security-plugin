@@ -133,7 +133,7 @@ abstract class ModelScannerTest extends RepositorySteps {
         if (response.statusCode == 200) {
             Reporter.log('- File downloaded successfully', true)
             Assert.assertTrue(isFileSafe)
-        } else if (response.getStatusCode() == 403 && !isFileSafe) {
+        } else if (response.getStatusCode() == 404 && !isFileSafe) {
             Reporter.log('- File download prevented', true)
             Assert.assertFalse(isFileSafe)
         } else {
