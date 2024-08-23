@@ -1,0 +1,7 @@
+# ignore artifactory log files
+/artifactory/var/log
+/artifactory/**/*.log
+/artifactory/**/*.log.gz
+
+.idea/
+lib/
