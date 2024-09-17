@@ -11,7 +11,7 @@ dependencies {
     testImplementation 'commons-validator:commons-validator:1.7'
     testImplementation 'io.rest-assured:rest-assured:4.4.0'
     testImplementation 'org.testng:testng:7.9.0'
-    testImplementation 'org.yaml:snakeyaml:1.29'
+    testImplementation 'org.yaml:snakeyaml:2.3'
 }
 
 test {
